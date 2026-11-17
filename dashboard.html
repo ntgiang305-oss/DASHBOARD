@@ -1396,11 +1396,10 @@
 
   </main>
 
-
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     // =========================================================================
     // 1. DEFAULT STATE (PRE-POPULATED WITH 3 LIVE OPEN POSITIONS)
@@ -2258,14 +2257,8 @@
       const pathEl = document.getElementById('db-doc-path');
       if (pathEl) pathEl.textContent = docPathStr;
 
-      if (typeof __firebase_config === 'undefined' || !__firebase_config) {
-        updateDbStatusBadge(false, 'LOCAL SIMULATOR');
-        return;
-      }
-
       try {
-        const firebaseConfig = 
-        {
+        const firebaseConfig = {
           apiKey: "AIzaSyApnMxf44JTChI_e9mvNKvrayysv_CFRwc",
           authDomain: "ntgiang-tra.firebaseapp.com",
           databaseURL: "https://ntgiang-tra-default-rtdb.asia-southeast1.firebasedatabase.app",
@@ -2274,8 +2267,7 @@
           messagingSenderId: "640692511150",
           appId: "1:640692511150:web:5dccff6472de2cf920a83f",
           measurementId: "G-CNDTGEC593"
-        }
-          ;
+        };
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
@@ -2294,6 +2286,11 @@
         state.telemetryDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'gnt_telemetry', 'live_state');
         state.dbReady = true;
         updateDbStatusBadge(true, 'LIVE DB CONNECTED');
+
+        const existingDoc = await getDoc(state.telemetryDocRef);
+        if (!existingDoc.exists()) {
+          await setDoc(state.telemetryDocRef, buildMt5JsonPayload(), { merge: true });
+        }
 
         state.unsubSnapshot = onSnapshot(
           state.telemetryDocRef,
@@ -2391,7 +2388,7 @@
     // =========================================================================
     // 9. LIVE TICK SIMULATOR, TOAST & SYNCHRONOUS BOOTSTRAP
     // =========================================================================
-   /* setInterval(() => {
+    setInterval(() => {
       if (!state.isRunning || !state.localTickSim) return;
 
       const step = (Math.random() - 0.49) * 0.14;
@@ -2408,8 +2405,7 @@
       renderEngineBreakdown();
       renderFooterPrices();
     }, 1200);
-*/
- 
+
     let toastTimer = null;
     function showToast(msg, tone) {
       const toast = document.getElementById('hud-toast');
