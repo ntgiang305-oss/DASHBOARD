@@ -2391,7 +2391,7 @@
     // =========================================================================
     // 9. LIVE TICK SIMULATOR, TOAST & SYNCHRONOUS BOOTSTRAP
     // =========================================================================
-    setInterval(() => {
+   /* setInterval(() => {
       if (!state.isRunning || !state.localTickSim) return;
 
       const step = (Math.random() - 0.49) * 0.14;
@@ -2408,7 +2408,8 @@
       renderEngineBreakdown();
       renderFooterPrices();
     }, 1200);
-
+*/
+ 
     let toastTimer = null;
     function showToast(msg, tone) {
       const toast = document.getElementById('hud-toast');
