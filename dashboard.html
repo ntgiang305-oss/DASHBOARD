@@ -1395,30 +1395,7 @@
     </footer>
 
   </main>
-  <script type="module">
-  // Import the functions you need from the SDKs you need
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-analytics.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
 
-  // Your web app's Firebase configuration
-  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-  const firebaseConfig = {
-    apiKey: "AIzaSyApnMxf44JTChI_e9mvNKvrayysv_CFRwc",
-    authDomain: "ntgiang-tra.firebaseapp.com",
-    databaseURL: "https://ntgiang-tra-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "ntgiang-tra",
-    storageBucket: "ntgiang-tra.firebasestorage.app",
-    messagingSenderId: "640692511150",
-    appId: "1:640692511150:web:5dccff6472de2cf920a83f",
-    measurementId: "G-CNDTGEC593"
-  };
-
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-  const analytics = getAnalytics(app);
-</script>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -2287,7 +2264,18 @@
       }
 
       try {
-        const firebaseConfig = JSON.parse(__firebase_config);
+        const firebaseConfig = 
+        {
+          apiKey: "AIzaSyApnMxf44JTChI_e9mvNKvrayysv_CFRwc",
+          authDomain: "ntgiang-tra.firebaseapp.com",
+          databaseURL: "https://ntgiang-tra-default-rtdb.asia-southeast1.firebasedatabase.app",
+          projectId: "ntgiang-tra",
+          storageBucket: "ntgiang-tra.firebasestorage.app",
+          messagingSenderId: "640692511150",
+          appId: "1:640692511150:web:5dccff6472de2cf920a83f",
+          measurementId: "G-CNDTGEC593"
+        }
+          ;
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
