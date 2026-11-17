@@ -1,0 +1,2501 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GNT Trading — Full Telemetry HUD Dashboard</title>
+  <style>
+    :root {
+      --bg-void: #03060e;
+      --bg-shell: #070c16;
+      --bg-panel: #0b1221;
+      --bg-card: #0e1628;
+      --bg-card-tint-green: #0a1f1c;
+      --bg-card-tint-red: #1f0e16;
+      --border-subtle: rgba(148, 163, 184, 0.2);
+      --border-cyan: rgba(0, 229, 255, 0.42);
+      --cyan: #00e5ff;
+      --amber: #f59e0b;
+      --violet: #a855f7;
+      --emerald: #10b981;
+      --emerald-bright: #34d399;
+      --rose: #f43f5e;
+      --rose-bright: #fb7185;
+      --text-main: #f1f5f9;
+      --text-sub: #cbd5e1;
+      --text-muted: #7c8ba1;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      min-height: 100vh;
+      background-color: var(--bg-void);
+      background-image:
+        radial-gradient(circle at 50% 10%, rgba(0, 229, 255, 0.08) 0%, transparent 45%),
+        linear-gradient(rgba(0, 229, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 229, 255, 0.025) 1px, transparent 1px);
+      background-size: 100% 100%, 20px 20px, 20px 20px;
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 12px 10px 28px;
+    }
+
+    .mono {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ================= TOAST NOTIFICATION ================= */
+    #hud-toast {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translate(-50%, -16px);
+      z-index: 120;
+      background: rgba(7, 12, 22, 0.96);
+      border: 1px solid var(--cyan);
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.7), 0 0 14px rgba(0, 229, 255, 0.25);
+      border-radius: 6px;
+      padding: 7px 14px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #e0f7ff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      white-space: nowrap;
+    }
+
+    #hud-toast.show {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+
+    .toast-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 2px;
+      background: var(--cyan);
+      box-shadow: 0 0 8px var(--cyan);
+    }
+
+    /* ================= MAIN VERTICAL HUD SHELL ================= */
+    .hud-shell {
+      position: relative;
+      width: 100%;
+      max-width: 460px;
+      background: var(--bg-shell);
+      border: 1.5px solid var(--border-cyan);
+      border-radius: 8px;
+      box-shadow:
+        0 14px 44px rgba(0, 0, 0, 0.78),
+        0 0 26px rgba(0, 229, 255, 0.12);
+      padding: 12px;
+      overflow: hidden;
+    }
+
+    /* ================= SVG CIRCUIT OVERLAY ================= */
+    #circuit-svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 15;
+      overflow: visible;
+      display: block;
+    }
+
+    @keyframes pulseTravel {
+      0% { stroke-dashoffset: 84; }
+      100% { stroke-dashoffset: 0; }
+    }
+
+    .energy-pulse {
+      stroke-dasharray: 12 72;
+      animation: pulseTravel 1.3s linear infinite;
+    }
+
+    /* ================= 1. TOP HEADER & DRAWERS ================= */
+    .hud-header {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(0, 229, 255, 0.18);
+    }
+
+    .brand-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      background: rgba(0, 229, 255, 0.1);
+      border: 1px solid rgba(0, 229, 255, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.18);
+    }
+
+    .brand-title {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      color: #ffffff;
+      line-height: 1.15;
+    }
+
+    .brand-title span {
+      color: var(--cyan);
+      text-shadow: 0 0 8px rgba(0, 229, 255, 0.45);
+    }
+
+    .brand-sub {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 2px;
+      font-size: 9.5px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .live-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--emerald-bright);
+      box-shadow: 0 0 7px var(--emerald-bright);
+      flex-shrink: 0;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-shrink: 0;
+    }
+
+    .slope-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      height: 27px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: rgba(11, 22, 44, 0.96);
+      border: 1px solid rgba(0, 229, 255, 0.5);
+      color: #cffafe;
+      font-size: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .slope-pill:hover {
+      border-color: var(--cyan);
+      box-shadow: 0 0 12px rgba(0, 229, 255, 0.3);
+    }
+
+    .db-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      height: 27px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: rgba(16, 185, 129, 0.14);
+      border: 1px solid rgba(52, 211, 153, 0.5);
+      color: #6ee7b7;
+      font-size: 10px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .db-pill:hover {
+      border-color: var(--emerald-bright);
+      box-shadow: 0 0 10px rgba(52, 211, 153, 0.3);
+    }
+
+    .db-pill.offline {
+      background: rgba(245, 158, 11, 0.14);
+      border-color: rgba(245, 158, 11, 0.5);
+      color: #fcd34d;
+    }
+
+    .json-drawer,
+    #hysteresis-drawer {
+      position: relative;
+      z-index: 10;
+      margin-top: 9px;
+      padding: 10px 11px;
+      border-radius: 6px;
+      background: #091224;
+      border: 1px solid rgba(0, 229, 255, 0.38);
+      display: none;
+    }
+
+    .json-drawer {
+      border-color: rgba(52, 211, 153, 0.42);
+    }
+
+    .json-drawer.open,
+    #hysteresis-drawer.open {
+      display: block;
+    }
+
+    .drawer-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--text-sub);
+      margin-bottom: 6px;
+    }
+
+    .db-meta-box {
+      background: #060b16;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 5px;
+      padding: 6px 8px;
+      margin-bottom: 8px;
+      font-size: 9.5px;
+      color: var(--text-sub);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .db-meta-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .db-path-text {
+      color: #6ee7b7;
+      word-break: break-all;
+      font-size: 9px;
+    }
+
+    .json-editor {
+      width: 100%;
+      height: 150px;
+      background: #040812;
+      border: 1px solid rgba(0, 229, 255, 0.35);
+      border-radius: 5px;
+      padding: 8px;
+      color: #a5f3fc;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      line-height: 1.4;
+      resize: vertical;
+      outline: none;
+    }
+
+    .json-editor:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.2);
+    }
+
+    .json-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1.25fr;
+      gap: 6px;
+      margin-top: 7px;
+    }
+
+    .json-btn {
+      height: 27px;
+      border-radius: 5px;
+      font-size: 9.5px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: #101c34;
+      color: #e2e8f0;
+      transition: all 0.15s ease;
+    }
+
+    .json-btn:hover {
+      border-color: var(--cyan);
+      color: #ffffff;
+    }
+
+    .json-btn.seed {
+      background: rgba(245, 158, 11, 0.14);
+      border-color: rgba(245, 158, 11, 0.5);
+      color: #fcd34d;
+    }
+
+    .json-btn.push {
+      background: linear-gradient(180deg, #073d2e 0%, #04261c 100%);
+      border-color: var(--emerald-bright);
+      color: #6ee7b7;
+    }
+
+    .slider-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    input[type="range"].cyber-range {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 5px;
+      border-radius: 3px;
+      background: #132342;
+      border: 1px solid rgba(0, 229, 255, 0.35);
+      outline: none;
+    }
+
+    input[type="range"].cyber-range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      background: var(--cyan);
+      box-shadow: 0 0 8px var(--cyan);
+      cursor: pointer;
+    }
+
+    .drawer-scale {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 5px;
+      font-size: 9.5px;
+    }
+
+    /* ================= 2. VERTICAL CIRCUIT ARCHITECTURE ================= */
+    .regime-row {
+      position: relative;
+      z-index: 10;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 9px;
+      margin-top: 12px;
+    }
+
+    .regime-btn {
+      position: relative;
+      z-index: 10;
+      background: var(--bg-card);
+      border: 1.5px solid rgba(148, 163, 184, 0.24);
+      border-radius: 7px;
+      padding: 8px 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: all 0.16s ease;
+    }
+
+    .regime-btn:hover {
+      border-color: rgba(148, 163, 184, 0.5);
+      color: #e2e8f0;
+    }
+
+    .regime-name {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.07em;
+    }
+
+    .regime-thresh {
+      font-size: 9.5px;
+      opacity: 0.85;
+    }
+
+    .regime-btn.is-active[data-mode="TREND"] {
+      background: linear-gradient(180deg, rgba(0, 229, 255, 0.2) 0%, var(--bg-card) 100%);
+      border-color: var(--cyan);
+      color: var(--cyan);
+      box-shadow: 0 0 14px rgba(0, 229, 255, 0.34), inset 0 0 10px rgba(0, 229, 255, 0.12);
+    }
+
+    .regime-btn.is-active[data-mode="NEUTRAL"] {
+      background: linear-gradient(180deg, rgba(245, 158, 11, 0.22) 0%, var(--bg-card) 100%);
+      border-color: var(--amber);
+      color: #fbbf24;
+      box-shadow: 0 0 14px rgba(245, 158, 11, 0.34), inset 0 0 10px rgba(245, 158, 11, 0.12);
+    }
+
+    .regime-btn.is-active[data-mode="REVERS"] {
+      background: linear-gradient(180deg, rgba(168, 85, 247, 0.24) 0%, var(--bg-card) 100%);
+      border-color: var(--violet);
+      color: #d8b4fe;
+      box-shadow: 0 0 14px rgba(168, 85, 247, 0.36), inset 0 0 10px rgba(168, 85, 247, 0.14);
+    }
+
+    .circuit-gap-top {
+      height: 42px;
+      width: 100%;
+      pointer-events: none;
+    }
+
+    .core-row {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      justify-content: center;
+    }
+
+    @keyframes corePulse {
+      0%, 100% {
+        box-shadow: 0 0 16px rgba(0, 229, 255, 0.28), inset 0 0 10px rgba(0, 229, 255, 0.1);
+      }
+      50% {
+        box-shadow: 0 0 26px rgba(0, 229, 255, 0.5), inset 0 0 16px rgba(0, 229, 255, 0.2);
+      }
+    }
+
+    .gnt-core {
+      position: relative;
+      z-index: 10;
+      width: 210px;
+      height: 54px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #09162e 0%, #10264f 50%, #09162e 100%);
+      border: 1.5px solid var(--cyan);
+      animation: corePulse 2.8s ease-in-out infinite;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 0 12px;
+    }
+
+    .core-title {
+      font-size: 13.5px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      color: #ffffff;
+      text-shadow: 0 0 8px rgba(0, 229, 255, 0.6);
+      line-height: 1.1;
+    }
+
+    .core-state {
+      font-size: 8.5px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--cyan);
+      margin-top: 2px;
+    }
+
+    .circuit-gap-bottom {
+      height: 36px;
+      width: 100%;
+      pointer-events: none;
+    }
+
+    /* ================= 3. VỊ THẾ HIỆN TẠI (ACTIVE POSITIONS) ================= */
+    .panel-box {
+      position: relative;
+      z-index: 10;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-cyan);
+      border-radius: 7px;
+      padding: 10px 11px;
+    }
+
+    .positions-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+    }
+
+    .positions-title-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .positions-title {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      color: var(--cyan);
+    }
+
+    .count-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(0, 229, 255, 0.12);
+      border: 1px solid rgba(0, 229, 255, 0.35);
+      color: #cffafe;
+    }
+
+    .add-pos-group {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .add-btn {
+      height: 23px;
+      padding: 0 8px;
+      border-radius: 5px;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .add-btn.buy {
+      background: rgba(16, 185, 129, 0.14);
+      border: 1px solid rgba(16, 185, 129, 0.55);
+      color: var(--emerald-bright);
+    }
+
+    .add-btn.buy:hover {
+      background: rgba(16, 185, 129, 0.28);
+      box-shadow: 0 0 9px rgba(16, 185, 129, 0.35);
+    }
+
+    .add-btn.sell {
+      background: rgba(244, 63, 94, 0.14);
+      border: 1px solid rgba(244, 63, 94, 0.55);
+      color: var(--rose-bright);
+    }
+
+    .add-btn.sell:hover {
+      background: rgba(244, 63, 94, 0.28);
+      box-shadow: 0 0 9px rgba(244, 63, 94, 0.35);
+    }
+
+    .pos-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .pos-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 7px 9px;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .pos-item:hover {
+      background: #121c33;
+    }
+
+    .pos-item.is-buy { border-left: 3px solid var(--emerald-bright); }
+    .pos-item.is-sell { border-left: 3px solid var(--rose-bright); }
+    .pos-item.is-open { border-color: rgba(0, 229, 255, 0.6); }
+
+    .pos-top-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .pos-left {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10.5px;
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+
+    .pos-ticket {
+      color: var(--text-muted);
+      font-size: 9.5px;
+      font-weight: 700;
+    }
+
+    .pos-side {
+      font-weight: 800;
+      font-size: 10.5px;
+    }
+
+    .pos-side.buy { color: var(--emerald-bright); }
+    .pos-side.sell { color: var(--rose-bright); }
+
+    .pos-price {
+      color: #e2e8f0;
+      font-size: 10.5px;
+    }
+
+    .pos-engine-tag {
+      font-size: 8.5px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: rgba(148, 163, 184, 0.12);
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      color: #93c5fd;
+    }
+
+    .pos-right {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex-shrink: 0;
+    }
+
+    .pos-pnl {
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .pos-pnl.pos { color: var(--emerald-bright); }
+    .pos-pnl.neg { color: var(--rose-bright); }
+
+    .pos-close-btn {
+      width: 19px;
+      height: 19px;
+      border-radius: 4px;
+      background: rgba(244, 63, 94, 0.14);
+      border: 1px solid rgba(244, 63, 94, 0.42);
+      color: #fda4af;
+      font-size: 12px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .pos-close-btn:hover {
+      background: rgba(244, 63, 94, 0.38);
+      color: #ffffff;
+    }
+
+    .pos-expand-bar {
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px dashed rgba(0, 229, 255, 0.25);
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      font-size: 9.5px;
+      color: var(--text-muted);
+    }
+
+    .pos-expand-bar strong {
+      color: #e2e8f0;
+      font-weight: 700;
+    }
+
+    .pos-empty {
+      text-align: center;
+      padding: 12px 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* ================= 4. COMPACT CONTROL BAR ================= */
+    .control-bar {
+      position: relative;
+      z-index: 10;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 7px;
+      margin-top: 10px;
+    }
+
+    .ctrl-btn {
+      height: 32px;
+      border-radius: 6px;
+      font-size: 10.5px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      color: #ffffff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .ctrl-btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn-start {
+      background: linear-gradient(180deg, #073d2e 0%, #04261c 100%);
+      border: 1px solid var(--emerald-bright);
+    }
+
+    .btn-start.active {
+      box-shadow: 0 0 12px rgba(52, 211, 153, 0.35);
+    }
+
+    .btn-stop {
+      background: linear-gradient(180deg, #102447 0%, #09152b 100%);
+      border: 1px solid rgba(96, 165, 250, 0.55);
+    }
+
+    .btn-stop.paused {
+      border-color: var(--amber);
+      box-shadow: 0 0 12px rgba(245, 158, 11, 0.35);
+    }
+
+    .btn-close-all {
+      background: linear-gradient(180deg, #420c22 0%, #290614 100%);
+      border: 1px solid var(--rose-bright);
+    }
+
+    /* ================= 5. CAPITAL & RISK STRIP ================= */
+    .ref-section {
+      position: relative;
+      z-index: 10;
+      margin-top: 11px;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 7px 8px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-width: 0;
+    }
+
+    .stat-card.tint-green {
+      background: var(--bg-card-tint-green);
+      border-color: rgba(16, 185, 129, 0.34);
+    }
+
+    .stat-card.tint-red {
+      background: var(--bg-card-tint-red);
+      border-color: rgba(244, 63, 94, 0.34);
+    }
+
+    .stat-lbl {
+      font-size: 8.5px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .stat-val {
+      margin-top: 4px;
+      font-size: 13px;
+      font-weight: 800;
+      color: #ffffff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .val-green { color: var(--emerald-bright); }
+    .val-red { color: var(--rose-bright); }
+    .val-amber { color: #fbbf24; }
+    .val-cyan { color: var(--cyan); }
+
+    /* ================= 6. SECTION HEADERS & COLLAPSE BUTTONS ================= */
+    .sec-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      padding: 0 1px;
+    }
+
+    .sec-title {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .sec-title.cyan { color: var(--cyan); }
+    .sec-title.gold { color: #eab308; }
+
+    .sec-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--text-muted);
+    }
+
+    .collapse-btn {
+      width: 18px;
+      height: 16px;
+      border-radius: 3px;
+      background: #101b30;
+      border: 1px solid rgba(148, 163, 184, 0.32);
+      color: #cbd5e1;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .collapse-btn:hover {
+      border-color: var(--cyan);
+      color: #ffffff;
+    }
+
+    .sec-body.collapsed {
+      display: none;
+    }
+
+    .stack-6 {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .dd-bar {
+      background: var(--bg-card-tint-red);
+      border: 1px solid rgba(244, 63, 94, 0.34);
+      border-radius: 6px;
+      padding: 7px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .dd-lbl {
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: #cbd5e1;
+    }
+
+    .dd-val {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--rose-bright);
+    }
+
+    /* ================= 7. ENGINE BREAKDOWN ================= */
+    .engine-col-head {
+      display: grid;
+      grid-template-columns: 1.65fr 0.55fr 0.45fr 0.85fr 0.9fr 0.85fr 0.75fr;
+      gap: 3px;
+      padding: 4px 8px;
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+      margin-bottom: 6px;
+    }
+
+    .engine-col-head span:nth-child(n+3) {
+      text-align: right;
+    }
+
+    .engine-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-left: 2.5px solid var(--cyan);
+      border-radius: 6px;
+      padding: 7px 8px 6px;
+      margin-bottom: 6px;
+    }
+
+    .engine-card:last-child {
+      margin-bottom: 0;
+    }
+
+    .engine-card.standby {
+      border-left-color: #64748b;
+    }
+
+    .engine-grid {
+      display: grid;
+      grid-template-columns: 1.65fr 0.55fr 0.45fr 0.85fr 0.9fr 0.85fr 0.75fr;
+      gap: 3px;
+      align-items: center;
+    }
+
+    .eng-identity {
+      min-width: 0;
+      padding-right: 4px;
+    }
+
+    .eng-name {
+      font-size: 11px;
+      font-weight: 800;
+      color: #ffffff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .eng-status {
+      font-size: 8px;
+      font-weight: 700;
+      margin-top: 2px;
+      letter-spacing: 0.03em;
+    }
+
+    .eng-status.ready { color: var(--emerald-bright); }
+    .eng-status.standby { color: #94a3b8; }
+
+    .eng-magic {
+      font-size: 8px;
+      color: var(--text-muted);
+      margin-top: 1px;
+    }
+
+    .eng-period-col,
+    .eng-num-col {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      font-size: 9px;
+    }
+
+    .eng-num-col {
+      text-align: right;
+    }
+
+    .period-tag {
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+
+    .period-tag.day { color: var(--cyan); }
+    .period-tag.month { color: #fbbf24; }
+
+    .eng-footer {
+      margin-top: 5px;
+      padding-top: 4px;
+      border-top: 1px solid rgba(148, 163, 184, 0.12);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 8.5px;
+      font-weight: 700;
+      color: var(--text-muted);
+    }
+
+    /* ================= 8. STATUS FOOTER ================= */
+    .status-footer {
+      position: relative;
+      z-index: 10;
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(148, 163, 184, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 9.5px;
+      color: var(--text-muted);
+    }
+
+    .status-footer strong {
+      color: #e2e8f0;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Toast Feedback -->
+  <div id="hud-toast">
+    <span id="toast-dot" class="toast-dot"></span>
+    <span id="toast-msg">GNT Engine Ready</span>
+  </div>
+
+  <!-- SINGLE-COLUMN CYBERPUNK HUD SHELL (max-width: 460px) -->
+  <main id="hud-shell" class="hud-shell">
+
+    <!-- EXACT-PIXEL SVG CIRCUIT OVERLAY -->
+    <svg id="circuit-svg" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="glow-cyan" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2.5" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        <filter id="glow-amber" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2.5" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        <filter id="glow-violet" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2.5" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+      <g id="circuit-layer"></g>
+    </svg>
+
+    <!-- 1. TOP HEADER & INTERACTIVE DRAWERS -->
+    <header class="hud-header">
+      <div class="brand-left">
+        <div class="brand-icon">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 20h18" />
+            <rect x="5" y="13" width="2.5" height="7" rx="0.5" fill="#00e5ff" fill-opacity="0.3" />
+            <rect x="10.5" y="9" width="2.5" height="11" rx="0.5" fill="#00e5ff" fill-opacity="0.6" />
+            <rect x="16" y="5" width="2.5" height="15" rx="0.5" fill="#00e5ff" fill-opacity="0.9" />
+            <path d="M4 11l5-4 4 2 7-6" />
+          </svg>
+        </div>
+        <div>
+          <div class="brand-title"><span>GNT</span> Trading</div>
+          <div class="brand-sub">
+            <span id="ea-dot" class="live-dot"></span>
+            <span id="ea-status" style="color:#34d399;font-weight:700;">EA Connected</span>
+            <span>|</span>
+            <span class="mono">M15 · XAUUSD · H1</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button type="button" class="slope-pill mono" onclick="toggleSlopeDrawer()" title="Kiểm thử bộ lọc Slope/ATR Hysteresis">
+          <span style="color:#00e5ff;">Slope/ATR:</span>
+          <strong id="slope-pill-val" style="color:#ffffff;">0.058</strong>
+        </button>
+        <button type="button" id="db-toggle-btn" class="db-pill mono" onclick="toggleJsonDrawer()" title="Mở cấu hình Realtime DB & MT5 JSON Schema">
+          <span>JSON / DB</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Collapsible MT5 JSON Sync & Realtime DB Drawer -->
+    <section id="json-db-drawer" class="json-drawer">
+      <div class="drawer-head">
+        <span style="color:#6ee7b7;">MT5 JSON SYNC &amp; REALTIME DB SCHEMA</span>
+        <span id="db-conn-label" class="mono" style="color:#fbbf24;">INIT...</span>
+      </div>
+
+      <div class="db-meta-box mono">
+        <div class="db-meta-row">
+          <span>Firestore Path:</span>
+          <button type="button" class="json-btn" style="height:20px;padding:0 6px;font-size:8.5px;" onclick="copyDbPath()">Copy Path</button>
+        </div>
+        <div id="db-doc-path" class="db-path-text">artifacts/default-app-id/public/data/gnt_telemetry/live_state</div>
+        <div class="db-meta-row" style="margin-top:2px;border-top:1px dashed rgba(148,163,184,0.18);padding-top:4px;">
+          <span>Last Sync: <strong id="db-last-sync" style="color:#e2e8f0;">LIVE LOCAL</strong></span>
+          <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;color:#93c5fd;">
+            <input type="checkbox" id="sim-tick-toggle" checked onchange="toggleLocalTickSim(this.checked)" />
+            <span>Auto Tick Sim</span>
+          </label>
+        </div>
+      </div>
+
+      <textarea id="mt5-json-textarea" class="json-editor" spellcheck="false" placeholder="Dán JSON từ MT5 vào đây để đẩy lên Realtime DB..."></textarea>
+
+      <div class="json-actions">
+        <button type="button" class="json-btn" onclick="copyJsonTemplate()">Copy JSON</button>
+        <button type="button" class="json-btn seed" onclick="seedDemoDataToDb()">Reset Demo</button>
+        <button type="button" class="json-btn push" onclick="pushJsonFromEditor()">Push JSON to DB</button>
+      </div>
+    </section>
+
+    <!-- Collapsible Hysteresis Test Drawer -->
+    <section id="hysteresis-drawer">
+      <div class="drawer-head">
+        <span>HYSTERESIS SIMULATOR (SLOPE MA / ATR)</span>
+        <span id="drawer-slope-val" class="mono" style="color:#00e5ff;">0.058</span>
+      </div>
+      <div class="slider-wrap">
+        <span class="mono" style="font-size:9.5px;color:#d8b4fe;">0.000</span>
+        <input type="range" id="slope-slider" class="cyber-range" min="0" max="0.100" step="0.002" value="0.058" oninput="handleSlopeInput(this.value)" />
+        <span class="mono" style="font-size:9.5px;color:#00e5ff;">0.100</span>
+      </div>
+      <div class="drawer-scale mono">
+        <span style="color:#d8b4fe;">Revers &lt; 0.02</span>
+        <span style="color:#fbbf24;">Neutral 0.02–0.05</span>
+        <span style="color:#00e5ff;">Trend &gt; 0.05</span>
+      </div>
+    </section>
+
+    <!-- 2. TOP ROW (3 REGIME NODES) -->
+    <section class="regime-row">
+      <button type="button" id="node-trend" class="regime-btn is-active" data-mode="TREND" onclick="selectRegime('TREND', true)">
+        <span class="regime-name">TREND</span>
+        <span class="regime-thresh mono">&gt; 0.050</span>
+      </button>
+
+      <button type="button" id="node-neutral" class="regime-btn" data-mode="NEUTRAL" onclick="selectRegime('NEUTRAL', true)">
+        <span class="regime-name">NEUTRAL</span>
+        <span class="regime-thresh mono">0.02–0.05</span>
+      </button>
+
+      <button type="button" id="node-revers" class="regime-btn" data-mode="REVERS" onclick="selectRegime('REVERS', true)">
+        <span class="regime-name">REVERS</span>
+        <span class="regime-thresh mono">&lt; 0.020</span>
+      </button>
+    </section>
+
+    <!-- 42px Circuit Zone: 3 Regime Bezier Curves -> GNT CORE -->
+    <div class="circuit-gap-top"></div>
+
+    <!-- CENTER MODULE: GNT CORE -->
+    <section class="core-row">
+      <div id="node-core" class="gnt-core">
+        <svg width="26" height="26" viewBox="0 0 36 36" fill="none" stroke="#00e5ff" stroke-width="2">
+          <rect x="9" y="9" width="18" height="18" rx="3" fill="rgba(0, 229, 255, 0.14)" />
+          <circle cx="18" cy="18" r="4" />
+          <path d="M13 4v5M18 4v5M23 4v5M13 27v5M18 27v5M23 27v5M4 13h5M4 18h5M4 23h5M27 13h5M27 18h5M27 23h5" stroke-linecap="round" />
+        </svg>
+        <div>
+          <div class="core-title">GNT CORE</div>
+          <div id="core-sub-label" class="core-state mono">TREND ENGINE ACTIVE</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 36px Circuit Zone: 1 Straight Trunk Line -> Vị Thế Hiện Tại -->
+    <div class="circuit-gap-bottom"></div>
+
+    <!-- 3. VỊ THẾ HIỆN TẠI (ACTIVE POSITIONS — PRE-POPULATED WITH 3 LIVE TRADES) -->
+    <section id="node-positions" class="panel-box">
+      <div class="positions-head">
+        <div class="positions-title-group">
+          <span class="positions-title">VỊ THẾ HIỆN TẠI</span>
+          <span id="pos-count-badge" class="count-badge mono">3/3</span>
+        </div>
+
+        <div class="add-pos-group">
+          <button type="button" id="btn-add-buy" class="add-btn buy" onclick="openNewPosition('BUY')">+ BUY</button>
+          <button type="button" id="btn-add-sell" class="add-btn sell" onclick="openNewPosition('SELL')">+ SELL</button>
+        </div>
+      </div>
+
+      <div id="pos-list" class="pos-list"></div>
+    </section>
+
+    <!-- 4. COMPACT CONTROL BAR -->
+    <div class="control-bar">
+      <button type="button" id="btn-start" class="ctrl-btn btn-start active" onclick="setRunning(true)">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="#34d399"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg>
+        <span>START</span>
+      </button>
+
+      <button type="button" id="btn-stop" class="ctrl-btn btn-stop" onclick="setRunning(false)">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="#bae6fd"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg>
+        <span>STOP</span>
+      </button>
+
+      <button type="button" id="btn-close-all" class="ctrl-btn btn-close-all" onclick="handleCloseAll()">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fda4af" stroke-width="2.8" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        <span id="close-all-lbl">CLOSE ALL</span>
+      </button>
+    </div>
+
+    <!-- 5. CAPITAL & RISK STRIP -->
+    <section class="ref-section">
+      <div class="grid-4">
+        <div class="stat-card">
+          <span class="stat-lbl">MODE</span>
+          <span id="cap-mode-val" class="stat-val mono">FIXED</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-lbl">CAPITAL</span>
+          <span id="cap-val" class="stat-val mono">10000.00</span>
+        </div>
+        <div class="stat-card tint-red">
+          <span class="stat-lbl">RISK CAP</span>
+          <span id="cap-risk-val" class="stat-val val-red mono">1.50%</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-lbl">OPEN</span>
+          <span id="cap-open-val" class="stat-val mono">3</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. TODAY'S PERFORMANCE -->
+    <section class="ref-section">
+      <div class="sec-header">
+        <span class="sec-title cyan">TODAY'S PERFORMANCE</span>
+        <div class="sec-right mono">
+          <span>UTC+7</span>
+          <button type="button" class="collapse-btn" onclick="toggleSection('sec-today', this)">-</button>
+        </div>
+      </div>
+
+      <div id="sec-today" class="sec-body stack-6">
+        <div class="grid-4">
+          <div class="stat-card">
+            <span class="stat-lbl">FLOATING</span>
+            <span id="today-floating" class="stat-val val-green mono">+46.40</span>
+          </div>
+          <div class="stat-card tint-green">
+            <span class="stat-lbl">PROFIT</span>
+            <span id="today-profit" class="stat-val val-green mono">+189.88</span>
+          </div>
+          <div class="stat-card tint-red">
+            <span class="stat-lbl">LOSS</span>
+            <span id="today-loss" class="stat-val val-red mono">-0.00</span>
+          </div>
+          <div class="stat-card tint-green">
+            <span class="stat-lbl">NET TODAY</span>
+            <span id="today-net" class="stat-val val-green mono">+236.28</span>
+          </div>
+        </div>
+
+        <div class="grid-4">
+          <div class="stat-card">
+            <span class="stat-lbl">OPEN</span>
+            <span id="today-open" class="stat-val mono">3</span>
+          </div>
+          <div class="stat-card tint-green">
+            <span class="stat-lbl">TP</span>
+            <span id="today-tp" class="stat-val val-green mono">3</span>
+          </div>
+          <div class="stat-card tint-red">
+            <span class="stat-lbl">SL</span>
+            <span id="today-sl" class="stat-val val-red mono">0</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-lbl">WIN RATE</span>
+            <span id="today-wr" class="stat-val mono">100.0%</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. OVERALL PERFORMANCE -->
+    <section class="ref-section">
+      <div class="sec-header">
+        <span class="sec-title gold">OVERALL PERFORMANCE</span>
+        <div class="sec-right mono">
+          <span>SINCE 2026.11.01</span>
+          <button type="button" class="collapse-btn" onclick="toggleSection('sec-overall', this)">-</button>
+        </div>
+      </div>
+
+      <div id="sec-overall" class="sec-body stack-6">
+        <div class="grid-4">
+          <div class="stat-card">
+            <span class="stat-lbl">CLOSED</span>
+            <span id="ov-closed" class="stat-val mono">14</span>
+          </div>
+          <div class="stat-card tint-green">
+            <span class="stat-lbl">TP</span>
+            <span id="ov-tp" class="stat-val val-green mono">7</span>
+          </div>
+          <div class="stat-card tint-red">
+            <span class="stat-lbl">SL</span>
+            <span id="ov-sl" class="stat-val val-red mono">7</span>
+          </div>
+          <div class="stat-card tint-green">
+            <span class="stat-lbl">NET PROFIT</span>
+            <span id="ov-net" class="stat-val val-green mono">+237.09</span>
+          </div>
+        </div>
+
+        <div class="dd-bar">
+          <span class="dd-lbl">MAX DRAWDOWN</span>
+          <span id="ov-dd" class="dd-val mono">74.69 (0.75%)</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. ENGINE BREAKDOWN -->
+    <section class="ref-section">
+      <div class="sec-header">
+        <span class="sec-title cyan">ENGINE BREAKDOWN</span>
+        <div class="sec-right mono">
+          <span>4 ENGINES</span>
+          <button type="button" class="collapse-btn" onclick="toggleSection('sec-engines', this)">-</button>
+        </div>
+      </div>
+
+      <div id="sec-engines" class="sec-body">
+        <div class="engine-col-head mono">
+          <span>ENGINE / STATE</span>
+          <span></span>
+          <span>N</span>
+          <span>WIN RATE</span>
+          <span>P/L</span>
+          <span>FLOAT</span>
+          <span>DD</span>
+        </div>
+        <div id="engine-cards-list"></div>
+      </div>
+    </section>
+
+    <!-- STATUS FOOTER -->
+    <footer class="status-footer mono">
+      <div style="display:flex;align-items:center;gap:5px;">
+        <span class="live-dot"></span>
+        <span>Latency: <strong id="foot-latency">14 ms</strong></span>
+      </div>
+      <div>
+        <span>XAUUSD: <strong id="foot-bid">2,649.80</strong> / <strong id="foot-ask">2,649.98</strong></span>
+      </div>
+    </footer>
+
+  </main>
+  <script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-analytics.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const firebaseConfig = {
+    apiKey: "AIzaSyApnMxf44JTChI_e9mvNKvrayysv_CFRwc",
+    authDomain: "ntgiang-tra.firebaseapp.com",
+    databaseURL: "https://ntgiang-tra-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "ntgiang-tra",
+    storageBucket: "ntgiang-tra.firebasestorage.app",
+    messagingSenderId: "640692511150",
+    appId: "1:640692511150:web:5dccff6472de2cf920a83f",
+    measurementId: "G-CNDTGEC593"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+</script>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // =========================================================================
+    // 1. DEFAULT STATE (PRE-POPULATED WITH 3 LIVE OPEN POSITIONS)
+    // =========================================================================
+    function createDefaultPositions() {
+      return [
+        {
+          id: 104821,
+          side: 'BUY',
+          lot: 0.05,
+          entry: 2642.10,
+          engine: 'trendmany',
+          magic: '20261111',
+          slPips: 35,
+          tpPips: 85,
+          pnl: 38.50
+        },
+        {
+          id: 104824,
+          side: 'SELL',
+          lot: 0.03,
+          entry: 2654.68,
+          engine: 'reversion1',
+          magic: '20261113',
+          slPips: 25,
+          tpPips: 50,
+          pnl: 14.10
+        },
+        {
+          id: 104829,
+          side: 'BUY',
+          lot: 0.04,
+          entry: 2651.35,
+          engine: 'trendbalanced',
+          magic: '20261112',
+          slPips: 30,
+          tpPips: 70,
+          pnl: -6.20
+        }
+      ];
+    }
+
+    const state = {
+      regime: 'TREND',
+      slopeAtr: 0.058,
+      isRunning: true,
+      eaConnected: true,
+      mode: 'FIXED',
+      riskCap: 1.50,
+      bid: 2649.80,
+      spread: 0.18,
+      expandedPosId: null,
+      confirmCloseAll: false,
+      capital: 10000.00,
+      localTickSim: true,
+      externalOverride: false,
+
+      dbReady: false,
+      telemetryDocRef: null,
+      unsubSnapshot: null,
+
+      positions: createDefaultPositions(),
+
+      today: {
+        profit: 189.88,
+        loss: 0.00,
+        tp: 3,
+        sl: 0
+      },
+
+      overall: {
+        closed: 14,
+        tp: 7,
+        sl: 7,
+        netProfit: 237.09,
+        maxDd: 74.69
+      },
+
+      engines: [
+        {
+          id: 'trendmany',
+          name: 'trendmany',
+          status: 'READY',
+          magic: '#20261111',
+          day:   { n: 0, wins: 0, pl: 0.00,   dd: 0.00 },
+          month: { n: 4, wins: 2, pl: 49.33,  dd: 0.00 },
+          gates: '3/5',
+          direction: 'LONG'
+        },
+        {
+          id: 'trendbalanced',
+          name: 'trendbalanced',
+          status: 'READY',
+          magic: '#20261112',
+          day:   { n: 0, wins: 0, pl: 0.00,   dd: 0.00 },
+          month: { n: 3, wins: 0, pl: -77.39, dd: 77.39 },
+          gates: '2/5',
+          direction: 'LONG'
+        },
+        {
+          id: 'reversion1',
+          name: 'reversion1',
+          status: 'READY',
+          magic: '#20261113',
+          day:   { n: 2, wins: 2, pl: 132.95, dd: 74.69 },
+          month: { n: 4, wins: 3, pl: 170.68, dd: 74.69 },
+          gates: '4/5',
+          direction: 'SHORT'
+        },
+        {
+          id: 'reversion2',
+          name: 'reversion2',
+          status: 'STANDBY',
+          magic: '#20261114',
+          day:   { n: 0, wins: 0, pl: 0.00,   dd: 0.00 },
+          month: { n: 3, wins: 2, pl: 94.47,  dd: 21.10 },
+          gates: '0/5',
+          direction: 'NONE'
+        }
+      ]
+    };
+
+    // =========================================================================
+    // 2. FORMATTING & SCHEMA HELPERS
+    // =========================================================================
+    function fmtSigned(val) {
+      const sign = val >= 0 ? '+' : '-';
+      return `${sign}${Math.abs(val).toFixed(2)}`;
+    }
+
+    function fmtRate(wins, total) {
+      if (total <= 0) return '0.0%';
+      return `${((wins / total) * 100).toFixed(1)}%`;
+    }
+
+    function buildMt5JsonPayload() {
+      return {
+        ea_status: state.eaConnected ? 'CONNECTED' : 'DISCONNECTED',
+        is_running: state.isRunning,
+        regime: state.regime,
+        slope_atr: Number(state.slopeAtr.toFixed(3)),
+        symbol: 'XAUUSD',
+        bid: Number(state.bid.toFixed(2)),
+        spread: Number(state.spread.toFixed(2)),
+        mode: state.mode,
+        capital: Number(state.capital.toFixed(2)),
+        risk_cap: Number(state.riskCap.toFixed(2)),
+        positions: state.positions.slice(0, 3).map((p, idx) => ({
+          id: Number(p.id || (104821 + idx)),
+          side: p.side,
+          lot: Number(p.lot),
+          entry: Number(p.entry),
+          engine: p.engine,
+          magic: String(p.magic).replace('#', ''),
+          slPips: Number(p.slPips || 25),
+          tpPips: Number(p.tpPips || 55),
+          pnl: Number(p.pnl.toFixed(2))
+        })),
+        today: {
+          profit: Number(state.today.profit.toFixed(2)),
+          loss: Number(state.today.loss.toFixed(2)),
+          tp: Number(state.today.tp),
+          sl: Number(state.today.sl)
+        },
+        overall: {
+          closed: Number(state.overall.closed),
+          tp: Number(state.overall.tp),
+          sl: Number(state.overall.sl),
+          netProfit: Number(state.overall.netProfit.toFixed(2)),
+          maxDd: Number(state.overall.maxDd.toFixed(2))
+        },
+        engines: state.engines.map(e => ({
+          id: e.id,
+          name: e.name,
+          status: e.status,
+          magic: e.magic.startsWith('#') ? e.magic : `#${e.magic}`,
+          day: {
+            n: Number(e.day.n),
+            wins: Number(e.day.wins),
+            pl: Number(e.day.pl.toFixed(2)),
+            dd: Number(e.day.dd.toFixed(2))
+          },
+          month: {
+            n: Number(e.month.n),
+            wins: Number(e.month.wins),
+            pl: Number(e.month.pl.toFixed(2)),
+            dd: Number(e.month.dd.toFixed(2))
+          },
+          gates: e.gates,
+          direction: e.direction
+        })),
+        updated_at: new Date().toISOString()
+      };
+    }
+
+    function applyExternalJsonPayload(data) {
+      if (!data || typeof data !== 'object' || Object.keys(data).length === 0) return;
+
+      if (typeof data.regime === 'string' && ['TREND', 'NEUTRAL', 'REVERS'].includes(data.regime.toUpperCase())) {
+        state.regime = data.regime.toUpperCase();
+      }
+      if (typeof data.slope_atr === 'number' && !Number.isNaN(data.slope_atr)) {
+        state.slopeAtr = data.slope_atr;
+      }
+      if (typeof data.is_running === 'boolean') {
+        state.isRunning = data.is_running;
+      }
+      if (typeof data.ea_status === 'string') {
+        state.eaConnected = data.ea_status.toUpperCase() === 'CONNECTED';
+      }
+      if (typeof data.bid === 'number' && data.bid > 0) {
+        state.bid = data.bid;
+      }
+      if (typeof data.spread === 'number' && data.spread >= 0) {
+        state.spread = data.spread;
+      }
+      if (typeof data.mode === 'string') {
+        state.mode = data.mode;
+      }
+      if (typeof data.capital === 'number') {
+        state.capital = data.capital;
+      }
+      if (typeof data.risk_cap === 'number') {
+        state.riskCap = data.risk_cap;
+      }
+
+      if (Array.isArray(data.positions)) {
+        state.positions = data.positions.slice(0, 3).map((p, idx) => ({
+          id: Number(p.id ?? p.ticket ?? (104821 + idx)),
+          side: (p.side || p.type || 'BUY').toUpperCase() === 'SELL' ? 'SELL' : 'BUY',
+          lot: Number(p.lot ?? p.lots ?? 0.05),
+          entry: Number(p.entry ?? p.open_price ?? state.bid),
+          engine: String(p.engine || 'trendmany'),
+          magic: String(p.magic || '20261111').replace('#', ''),
+          slPips: Number(p.slPips ?? p.sl_pips ?? 25),
+          tpPips: Number(p.tpPips ?? p.tp_pips ?? 55),
+          pnl: Number(p.pnl ?? 0)
+        }));
+      }
+
+      if (data.today && typeof data.today === 'object') {
+        state.today.profit = Number(data.today.profit ?? state.today.profit);
+        state.today.loss = Number(data.today.loss ?? state.today.loss);
+        state.today.tp = Number(data.today.tp ?? data.today.tp_count ?? state.today.tp);
+        state.today.sl = Number(data.today.sl ?? data.today.sl_count ?? state.today.sl);
+      }
+
+      if (data.overall && typeof data.overall === 'object') {
+        state.overall.closed = Number(data.overall.closed ?? state.overall.closed);
+        state.overall.tp = Number(data.overall.tp ?? data.overall.tp_count ?? state.overall.tp);
+        state.overall.sl = Number(data.overall.sl ?? data.overall.sl_count ?? state.overall.sl);
+        state.overall.netProfit = Number(data.overall.netProfit ?? data.overall.net_profit ?? state.overall.netProfit);
+        state.overall.maxDd = Number(data.overall.maxDd ?? data.overall.max_dd_usd ?? state.overall.maxDd);
+      }
+
+      if (Array.isArray(data.engines) && data.engines.length > 0) {
+        state.engines = data.engines.map((e, i) => ({
+          id: String(e.id || e.name || `engine_${i + 1}`),
+          name: String(e.name || e.id || `engine_${i + 1}`),
+          status: String(e.status || 'READY').toUpperCase(),
+          magic: String(e.magic || '#20261111').startsWith('#') ? String(e.magic) : `#${e.magic}`,
+          day: {
+            n: Number(e.day?.n ?? 0),
+            wins: Number(e.day?.wins ?? 0),
+            pl: Number(e.day?.pl ?? 0),
+            dd: Number(e.day?.dd ?? 0)
+          },
+          month: {
+            n: Number(e.month?.n ?? 0),
+            wins: Number(e.month?.wins ?? 0),
+            pl: Number(e.month?.pl ?? 0),
+            dd: Number(e.month?.dd ?? 0)
+          },
+          gates: String(e.gates || '0/5'),
+          direction: String(e.direction || 'NONE').toUpperCase()
+        }));
+      }
+
+      syncRegimeVisuals(state.regime);
+      applyRunningVisuals(state.isRunning);
+
+      const editor = document.getElementById('mt5-json-textarea');
+      if (editor && document.activeElement !== editor) {
+        editor.value = JSON.stringify(buildMt5JsonPayload(), null, 2);
+      }
+
+      const nowStr = new Date().toLocaleTimeString('vi-VN', { hour12: false });
+      const syncTimeEl = document.getElementById('db-last-sync');
+      if (syncTimeEl) syncTimeEl.textContent = nowStr;
+
+      renderAll(true);
+    }
+
+    // =========================================================================
+    // 3. REGIME, HYSTERESIS & DRAWER CONTROLS
+    // =========================================================================
+    function syncRegimeVisuals(mode) {
+      document.getElementById('slope-pill-val').textContent = state.slopeAtr.toFixed(3);
+      document.getElementById('drawer-slope-val').textContent = state.slopeAtr.toFixed(3);
+      document.getElementById('slope-slider').value = Math.min(0.1, Math.max(0, state.slopeAtr));
+
+      ['TREND', 'NEUTRAL', 'REVERS'].forEach(m => {
+        const btn = document.getElementById(`node-${m.toLowerCase()}`);
+        if (btn) btn.classList.toggle('is-active', m === mode);
+      });
+
+      const subEl = document.getElementById('core-sub-label');
+      const colors = { TREND: '#00e5ff', NEUTRAL: '#fbbf24', REVERS: '#d8b4fe' };
+      subEl.textContent = `${mode} ENGINE ACTIVE`;
+      subEl.style.color = colors[mode] || '#00e5ff';
+    }
+
+    function toggleSlopeDrawer() {
+      document.getElementById('hysteresis-drawer').classList.toggle('open');
+      queueCircuitRender();
+    }
+
+    function toggleJsonDrawer() {
+      const drawer = document.getElementById('json-db-drawer');
+      const isOpen = drawer.classList.toggle('open');
+      if (isOpen) {
+        const editor = document.getElementById('mt5-json-textarea');
+        if (editor) editor.value = JSON.stringify(buildMt5JsonPayload(), null, 2);
+      }
+      queueCircuitRender();
+    }
+
+    function toggleLocalTickSim(enabled) {
+      state.localTickSim = Boolean(enabled);
+      showToast(state.localTickSim ? 'Bật giả lập giá tự động' : 'Tắt giả lập giá tự động', 'TREND');
+    }
+
+    function handleSlopeInput(raw) {
+      const val = parseFloat(raw);
+      state.slopeAtr = val;
+
+      let next = state.regime;
+      if (state.regime === 'TREND') {
+        if (val < 0.020) next = 'REVERS';
+        else if (val < 0.035) next = 'NEUTRAL';
+      } else if (state.regime === 'REVERS') {
+        if (val > 0.050) next = 'TREND';
+        else if (val > 0.030) next = 'NEUTRAL';
+      } else {
+        if (val > 0.050) next = 'TREND';
+        else if (val < 0.020) next = 'REVERS';
+      }
+      selectRegime(next, false);
+    }
+
+    function selectRegime(mode, syncSlider) {
+      state.regime = mode;
+
+      if (syncSlider) {
+        if (mode === 'TREND' && state.slopeAtr <= 0.050) state.slopeAtr = 0.058;
+        if (mode === 'NEUTRAL') state.slopeAtr = 0.034;
+        if (mode === 'REVERS' && state.slopeAtr >= 0.020) state.slopeAtr = 0.014;
+      }
+
+      syncRegimeVisuals(mode);
+
+      if (syncSlider) {
+        showToast(`Regime: ${mode} (Slope/ATR ${state.slopeAtr.toFixed(3)})`, mode);
+      }
+
+      syncStateToRealtimeDb(true);
+      queueCircuitRender();
+    }
+
+    function toggleSection(bodyId, btnEl) {
+      const body = document.getElementById(bodyId);
+      if (!body) return;
+      const isCollapsed = body.classList.toggle('collapsed');
+      btnEl.textContent = isCollapsed ? '+' : '-';
+      queueCircuitRender();
+    }
+
+    // =========================================================================
+    // 4. POSITIONS MANAGEMENT & REAL-TIME P&L CALCULATION
+    // =========================================================================
+    function recalcFloatingPnl() {
+      const ask = +(state.bid + state.spread).toFixed(2);
+      state.positions.forEach(p => {
+        const exitPrice = p.side === 'BUY' ? state.bid : ask;
+        const diff = p.side === 'BUY' ? (exitPrice - p.entry) : (p.entry - exitPrice);
+        p.pnl = +(diff * p.lot * 100).toFixed(2);
+      });
+    }
+
+    function settlePositionIntoStats(pos) {
+      const pnl = pos.pnl;
+      const isWin = pnl >= 0;
+
+      if (isWin) {
+        state.today.profit = +(state.today.profit + pnl).toFixed(2);
+        state.today.tp += 1;
+      } else {
+        state.today.loss = +(state.today.loss + Math.abs(pnl)).toFixed(2);
+        state.today.sl += 1;
+      }
+
+      state.overall.closed += 1;
+      if (isWin) state.overall.tp += 1;
+      else state.overall.sl += 1;
+      state.overall.netProfit = +(state.overall.netProfit + pnl).toFixed(2);
+
+      const eng = state.engines.find(e => e.id === pos.engine);
+      if (eng) {
+        eng.day.n += 1;
+        if (isWin) eng.day.wins += 1;
+        eng.day.pl = +(eng.day.pl + pnl).toFixed(2);
+
+        eng.month.n += 1;
+        if (isWin) eng.month.wins += 1;
+        eng.month.pl = +(eng.month.pl + pnl).toFixed(2);
+      }
+    }
+
+    function openNewPosition(side) {
+      // If already at 3 slots, replace the oldest position so buttons remain always responsive
+      if (state.positions.length >= 3) {
+        const oldest = state.positions.shift();
+        if (oldest) settlePositionIntoStats(oldest);
+      }
+
+      const ask = +(state.bid + state.spread).toFixed(2);
+      const entry = side === 'BUY' ? ask : state.bid;
+      const nextId = state.positions.length ? Math.max(...state.positions.map(p => p.id)) + 3 : 104831;
+
+      let engineId = 'trendmany';
+      if (state.regime === 'REVERS') {
+        engineId = side === 'SELL' ? 'reversion1' : 'reversion2';
+      } else if (state.regime === 'NEUTRAL') {
+        engineId = 'trendbalanced';
+      } else {
+        engineId = side === 'BUY' ? 'trendmany' : 'trendbalanced';
+      }
+
+      const engObj = state.engines.find(e => e.id === engineId);
+      if (engObj && engObj.status === 'STANDBY') engObj.status = 'READY';
+
+      state.positions.push({
+        id: nextId,
+        side,
+        lot: 0.04,
+        entry,
+        engine: engineId,
+        magic: engObj ? engObj.magic.replace('#', '') : '20261111',
+        slPips: state.regime === 'REVERS' ? 20 : 30,
+        tpPips: state.regime === 'REVERS' ? 40 : 75,
+        pnl: -0.72
+      });
+
+      state.expandedPosId = nextId;
+      renderAll(true);
+      syncStateToRealtimeDb(true);
+      showToast(`Mở #${nextId} ${side} 0.04 @ ${entry.toFixed(2)}`, side === 'BUY' ? 'BUY' : 'SELL');
+    }
+
+    function closeSinglePosition(id) {
+      const target = state.positions.find(p => p.id === id);
+      if (!target) return;
+
+      settlePositionIntoStats(target);
+      state.positions = state.positions.filter(p => p.id !== id);
+      if (state.expandedPosId === id) state.expandedPosId = null;
+
+      renderAll(true);
+      syncStateToRealtimeDb(true);
+      showToast(`Đóng #${target.id} ${target.side}: ${fmtSigned(target.pnl)}`, target.pnl >= 0 ? 'BUY' : 'SELL');
+    }
+
+    function togglePosExpand(id) {
+      state.expandedPosId = state.expandedPosId === id ? null : id;
+      renderPositions();
+    }
+
+    // =========================================================================
+    // 5. RENDER ALL UI SECTIONS (SYNCHRONOUS & ZERO-DEPENDENCY)
+    // =========================================================================
+    function renderPositions() {
+      const listEl = document.getElementById('pos-list');
+      const badgeEl = document.getElementById('pos-count-badge');
+
+      const count = state.positions.length;
+      badgeEl.textContent = `${count}/3`;
+
+      if (count === 0) {
+        listEl.innerHTML = `<div class="pos-empty">Không có vị thế mở (0/3). Nhấn <strong style="color:#34d399;">+ BUY</strong> hoặc <strong style="color:#fb7185;">+ SELL</strong> để mở lệnh.</div>`;
+        queueCircuitRender();
+        return;
+      }
+
+      listEl.innerHTML = state.positions.map((p) => {
+        const isBuy = p.side === 'BUY';
+        const isOpen = state.expandedPosId === p.id;
+        const entryStr = p.entry.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        const dir = isBuy ? 1 : -1;
+        const slPrice = (p.entry - dir * p.slPips * 0.1).toFixed(2);
+        const tpPrice = (p.entry + dir * p.tpPips * 0.1).toFixed(2);
+        const currentPrice = isBuy ? state.bid : +(state.bid + state.spread).toFixed(2);
+        const pips = (((currentPrice - p.entry) * dir) / 0.1).toFixed(1);
+
+        return `
+          <div class="pos-item ${isBuy ? 'is-buy' : 'is-sell'} ${isOpen ? 'is-open' : ''}" onclick="togglePosExpand(${p.id})">
+            <div class="pos-top-line">
+              <div class="pos-left mono">
+                <span class="pos-ticket">#${p.id}</span>
+                <span class="pos-side ${isBuy ? 'buy' : 'sell'}">${p.side}</span>
+                <span class="pos-price">${p.lot.toFixed(2)} @ ${entryStr}</span>
+                <span class="pos-engine-tag">${p.engine}</span>
+              </div>
+
+              <div class="pos-right mono">
+                <span class="pos-pnl ${p.pnl >= 0 ? 'pos' : 'neg'}">${fmtSigned(p.pnl)}</span>
+                <button type="button" class="pos-close-btn" title="Đóng lệnh" onclick="event.stopPropagation(); closeSinglePosition(${p.id})">×</button>
+              </div>
+            </div>
+
+            ${isOpen ? `
+              <div class="pos-expand-bar mono" onclick="event.stopPropagation()">
+                <div>SL: <strong style="color:#fb7185;">${slPrice}</strong></div>
+                <div>TP: <strong style="color:#34d399;">${tpPrice}</strong></div>
+                <div>Pips: <strong style="color:${parseFloat(pips) >= 0 ? '#34d399' : '#fb7185'};">${parseFloat(pips) >= 0 ? '+' : ''}${pips}</strong></div>
+                <div>Magic: <strong>#${p.magic}</strong></div>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+
+      queueCircuitRender();
+    }
+
+    function renderPerformanceSections() {
+      const totalFloating = state.positions.reduce((s, p) => s + p.pnl, 0);
+      const openCount = state.positions.length;
+
+      document.getElementById('cap-mode-val').textContent = state.mode;
+      document.getElementById('cap-val').textContent = state.capital.toFixed(2);
+      document.getElementById('cap-risk-val').textContent = `${state.riskCap.toFixed(2)}%`;
+      document.getElementById('cap-open-val').textContent = openCount;
+
+      const floatEl = document.getElementById('today-floating');
+      floatEl.textContent = fmtSigned(totalFloating);
+      floatEl.className = `stat-val mono ${totalFloating > 0 ? 'val-green' : totalFloating < 0 ? 'val-red' : ''}`;
+
+      document.getElementById('today-profit').textContent = `+${state.today.profit.toFixed(2)}`;
+      document.getElementById('today-loss').textContent = `-${state.today.loss.toFixed(2)}`;
+
+      const netToday = +(state.today.profit - state.today.loss + totalFloating).toFixed(2);
+      const netTodayEl = document.getElementById('today-net');
+      netTodayEl.textContent = fmtSigned(netToday);
+      netTodayEl.className = `stat-val mono ${netToday >= 0 ? 'val-green' : 'val-red'}`;
+
+      document.getElementById('today-open').textContent = openCount;
+      document.getElementById('today-tp').textContent = state.today.tp;
+      document.getElementById('today-sl').textContent = state.today.sl;
+      document.getElementById('today-wr').textContent = fmtRate(state.today.tp, state.today.tp + state.today.sl);
+
+      document.getElementById('ov-closed').textContent = state.overall.closed;
+      document.getElementById('ov-tp').textContent = state.overall.tp;
+      document.getElementById('ov-sl').textContent = state.overall.sl;
+
+      const ovNetEl = document.getElementById('ov-net');
+      ovNetEl.textContent = fmtSigned(state.overall.netProfit);
+      ovNetEl.className = `stat-val mono ${state.overall.netProfit >= 0 ? 'val-green' : 'val-red'}`;
+
+      const ddPct = ((state.overall.maxDd / state.capital) * 100).toFixed(2);
+      document.getElementById('ov-dd').textContent = `${state.overall.maxDd.toFixed(2)} (${ddPct}%)`;
+    }
+
+    function renderEngineBreakdown() {
+      const container = document.getElementById('engine-cards-list');
+
+      container.innerHTML = state.engines.map(eng => {
+        const openPositions = state.positions.filter(p => p.engine === eng.id);
+        const openCount = openPositions.length;
+        const liveFloat = openPositions.reduce((s, p) => s + p.pnl, 0);
+
+        const isStandby = eng.status === 'STANDBY' && openCount === 0;
+        const statusLabel = `${isStandby ? 'STANDBY' : 'READY'} | OPEN ${openCount}`;
+
+        const dayWr = fmtRate(eng.day.wins, eng.day.n);
+        const monthWr = fmtRate(eng.month.wins, eng.month.n);
+
+        const dayPlColor = eng.day.pl > 0 ? 'val-green' : eng.day.pl < 0 ? 'val-red' : '';
+        const monthPlColor = eng.month.pl > 0 ? 'val-green' : eng.month.pl < 0 ? 'val-red' : '';
+        const floatColor = liveFloat > 0 ? 'val-green' : liveFloat < 0 ? 'val-red' : '';
+
+        return `
+          <div class="engine-card ${isStandby ? 'standby' : ''}">
+            <div class="engine-grid">
+              <div class="eng-identity">
+                <div class="eng-name mono">${eng.name}</div>
+                <div class="eng-status mono ${isStandby ? 'standby' : 'ready'}">${statusLabel}</div>
+                <div class="eng-magic mono">${eng.magic}</div>
+              </div>
+
+              <div class="eng-period-col mono">
+                <span class="period-tag day">DAY</span>
+                <span class="period-tag month">MONTH</span>
+              </div>
+
+              <div class="eng-num-col mono">
+                <span>${eng.day.n}</span>
+                <span>${eng.month.n}</span>
+              </div>
+
+              <div class="eng-num-col mono">
+                <span>${dayWr}</span>
+                <span>${monthWr}</span>
+              </div>
+
+              <div class="eng-num-col mono">
+                <span class="${dayPlColor}">${fmtSigned(eng.day.pl)}</span>
+                <span class="${monthPlColor}">${fmtSigned(eng.month.pl)}</span>
+              </div>
+
+              <div class="eng-num-col mono">
+                <span class="${floatColor}">${fmtSigned(liveFloat)}</span>
+                <span class="${floatColor}">${fmtSigned(liveFloat)}</span>
+              </div>
+
+              <div class="eng-num-col mono">
+                <span class="${eng.day.dd > 0 ? 'val-amber' : ''}">${eng.day.dd.toFixed(2)}</span>
+                <span class="${eng.month.dd > 0 ? 'val-amber' : ''}">${eng.month.dd.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div class="eng-footer mono">
+              <span>GATES ${eng.gates}</span>
+              <span>DIRECTION: <strong style="color:#cbd5e1;">${eng.direction}</strong></span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderFooterPrices() {
+      const ask = +(state.bid + state.spread).toFixed(2);
+      document.getElementById('foot-bid').textContent = state.bid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      document.getElementById('foot-ask').textContent = ask.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function renderAll(skipPnlRecalc = false) {
+      if (!skipPnlRecalc) {
+        recalcFloatingPnl();
+      }
+      renderPositions();
+      renderPerformanceSections();
+      renderEngineBreakdown();
+      renderFooterPrices();
+    }
+
+    // =========================================================================
+    // 6. START / STOP / CLOSE ALL CONTROLS
+    // =========================================================================
+    function applyRunningVisuals(run) {
+      const btnStart = document.getElementById('btn-start');
+      const btnStop = document.getElementById('btn-stop');
+      const dot = document.getElementById('ea-dot');
+      const txt = document.getElementById('ea-status');
+
+      if (run) {
+        btnStart.classList.add('active');
+        btnStop.classList.remove('paused');
+        dot.style.background = '#34d399';
+        dot.style.boxShadow = '0 0 7px #34d399';
+        txt.textContent = state.eaConnected ? 'EA Connected' : 'EA Disconnected';
+        txt.style.color = state.eaConnected ? '#34d399' : '#fb7185';
+      } else {
+        btnStart.classList.remove('active');
+        btnStop.classList.add('paused');
+        dot.style.background = '#f59e0b';
+        dot.style.boxShadow = '0 0 7px #f59e0b';
+        txt.textContent = 'EA Paused';
+        txt.style.color = '#fbbf24';
+      }
+    }
+
+    function setRunning(run) {
+      state.isRunning = run;
+      applyRunningVisuals(run);
+      syncStateToRealtimeDb(true);
+      showToast(run ? 'GNT Core: Engine Running' : 'GNT Core: Engine Paused', run ? 'BUY' : 'NEUTRAL');
+      queueCircuitRender();
+    }
+
+    let closeAllTimer = null;
+    function handleCloseAll() {
+      if (state.positions.length === 0) {
+        showToast('Không có vị thế mở để đóng', 'TREND');
+        return;
+      }
+
+      const lbl = document.getElementById('close-all-lbl');
+      if (!state.confirmCloseAll) {
+        state.confirmCloseAll = true;
+        lbl.textContent = 'XÁC NHẬN?';
+        showToast('Nhấn lần nữa để đóng tất cả vị thế', 'SELL');
+        clearTimeout(closeAllTimer);
+        closeAllTimer = setTimeout(() => {
+          state.confirmCloseAll = false;
+          lbl.textContent = 'CLOSE ALL';
+        }, 3000);
+        return;
+      }
+
+      clearTimeout(closeAllTimer);
+      state.confirmCloseAll = false;
+      lbl.textContent = 'CLOSE ALL';
+
+      let settledSum = 0;
+      state.positions.forEach(p => {
+        settledSum += p.pnl;
+        settlePositionIntoStats(p);
+      });
+
+      const count = state.positions.length;
+      state.positions = [];
+      state.expandedPosId = null;
+
+      renderAll(true);
+      syncStateToRealtimeDb(true);
+      showToast(`Đã chốt ${count} vị thế (${fmtSigned(settledSum)})`, settledSum >= 0 ? 'BUY' : 'SELL');
+    }
+
+    // =========================================================================
+    // 7. EXACT-PIXEL SVG CIRCUIT RENDERER (3 REGIME BEZIER CURVES + 1 TRUNK LINE)
+    // =========================================================================
+    let rafQueued = false;
+    function queueCircuitRender() {
+      if (rafQueued) return;
+      rafQueued = true;
+      requestAnimationFrame(() => {
+        rafQueued = false;
+        drawCircuits();
+      });
+    }
+
+    function drawCircuits() {
+      const shell = document.getElementById('hud-shell');
+      const svg = document.getElementById('circuit-svg');
+      const layer = document.getElementById('circuit-layer');
+      if (!shell || !svg || !layer) return;
+
+      const sRect = shell.getBoundingClientRect();
+      if (sRect.width === 0 || sRect.height === 0) return;
+
+      svg.setAttribute('width', Math.round(sRect.width));
+      svg.setAttribute('height', Math.round(sRect.height));
+      svg.setAttribute('viewBox', `0 0 ${sRect.width} ${sRect.height}`);
+
+      const box = (id) => {
+        const el = document.getElementById(id);
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return {
+          left: r.left - sRect.left,
+          right: r.right - sRect.left,
+          top: r.top - sRect.top,
+          bottom: r.bottom - sRect.top,
+          cx: (r.left + r.right) / 2 - sRect.left,
+          w: r.width
+        };
+      };
+
+      const rTrend = box('node-trend');
+      const rNeutral = box('node-neutral');
+      const rRevers = box('node-revers');
+      const rCore = box('node-core');
+      const rPos = box('node-positions');
+
+      if (!rTrend || !rNeutral || !rRevers || !rCore || !rPos) return;
+
+      let markup = '';
+
+      // 1. 3 smooth cubic Bezier curves from bottom center of TREND, NEUTRAL, REVERS -> 3 top input pins of GNT CORE
+      const traces = [
+        { mode: 'TREND',   rect: rTrend,   pinX: rCore.left + rCore.w * 0.24, color: '#00e5ff', filter: 'glow-cyan' },
+        { mode: 'NEUTRAL', rect: rNeutral, pinX: rCore.cx,                    color: '#f59e0b', filter: 'glow-amber' },
+        { mode: 'REVERS',  rect: rRevers,  pinX: rCore.left + rCore.w * 0.76, color: '#a855f7', filter: 'glow-violet' }
+      ];
+
+      traces.forEach(t => {
+        const active = state.regime === t.mode;
+        const p1 = { x: t.rect.cx, y: t.rect.bottom };
+        const p2 = { x: t.pinX, y: rCore.top };
+        const dy = p2.y - p1.y;
+        const d = `M ${p1.x} ${p1.y} C ${p1.x} ${p1.y + dy * 0.55}, ${p2.x} ${p2.y - dy * 0.55}, ${p2.x} ${p2.y}`;
+
+        if (active) {
+          markup += `<path d="${d}" fill="none" stroke="${t.color}" stroke-width="6.5" stroke-opacity="0.32" filter="url(#${t.filter})" stroke-linecap="round" />`;
+          markup += `<path d="${d}" fill="none" stroke="${t.color}" stroke-width="2.3" stroke-opacity="1" stroke-linecap="round" />`;
+          if (state.isRunning) {
+            markup += `<path d="${d}" fill="none" stroke="#ffffff" stroke-width="2.1" stroke-opacity="0.95" class="energy-pulse" stroke-linecap="round" />`;
+          }
+          markup += `<circle cx="${p1.x}" cy="${p1.y}" r="3.6" fill="#070c16" stroke="${t.color}" stroke-width="2.1" filter="url(#${t.filter})" />`;
+          markup += `<circle cx="${p2.x}" cy="${p2.y}" r="3.6" fill="#070c16" stroke="${t.color}" stroke-width="2.1" filter="url(#${t.filter})" />`;
+        } else {
+          markup += `<path d="${d}" fill="none" stroke="#64748b" stroke-width="1.6" stroke-opacity="0.45" stroke-linecap="round" />`;
+          markup += `<circle cx="${p1.x}" cy="${p1.y}" r="2.6" fill="#070c16" stroke="#64748b" stroke-width="1.5" stroke-opacity="0.6" />`;
+          markup += `<circle cx="${p2.x}" cy="${p2.y}" r="2.6" fill="#070c16" stroke="#64748b" stroke-width="1.5" stroke-opacity="0.6" />`;
+        }
+      });
+
+      // 2. 1 vertical trunk line from bottom pin of GNT CORE straight down -> top border of VỊ THẾ HIỆN TẠI
+      const trunkColor = state.regime === 'REVERS' ? '#a855f7' : state.regime === 'NEUTRAL' ? '#f59e0b' : '#00e5ff';
+      const trunkFilter = state.regime === 'REVERS' ? 'glow-violet' : state.regime === 'NEUTRAL' ? 'glow-amber' : 'glow-cyan';
+      const p1 = { x: rCore.cx, y: rCore.bottom };
+      const p2 = { x: rPos.cx, y: rPos.top };
+      const trunkPath = `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`;
+
+      markup += `<path d="${trunkPath}" fill="none" stroke="${trunkColor}" stroke-width="6.5" stroke-opacity="0.34" filter="url(#${trunkFilter})" stroke-linecap="round" />`;
+      markup += `<path d="${trunkPath}" fill="none" stroke="${trunkColor}" stroke-width="2.5" stroke-opacity="1" stroke-linecap="round" />`;
+      if (state.isRunning) {
+        markup += `<path d="${trunkPath}" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-opacity="0.95" class="energy-pulse" stroke-linecap="round" />`;
+      }
+      markup += `<circle cx="${p1.x}" cy="${p1.y}" r="3.8" fill="#070c16" stroke="${trunkColor}" stroke-width="2.2" filter="url(#${trunkFilter})" />`;
+      markup += `<circle cx="${p2.x}" cy="${p2.y}" r="3.8" fill="#070c16" stroke="${trunkColor}" stroke-width="2.2" filter="url(#${trunkFilter})" />`;
+
+      layer.innerHTML = markup;
+    }
+
+    // =========================================================================
+    // 8. FIREBASE REALTIME SYNC (NON-DESTRUCTIVE ON EMPTY DOC) & JSON DRAWER
+    // =========================================================================
+    function updateDbStatusBadge(isLive, labelText) {
+      const dbPill = document.getElementById('db-toggle-btn');
+      const connLabel = document.getElementById('db-conn-label');
+      if (dbPill) dbPill.classList.toggle('offline', !isLive);
+      if (connLabel) {
+        connLabel.textContent = labelText;
+        connLabel.style.color = isLive ? '#34d399' : '#fbbf24';
+      }
+    }
+
+    async function syncStateToRealtimeDb(silent = true) {
+      if (!state.dbReady || !state.telemetryDocRef) return;
+      try {
+        const payload = buildMt5JsonPayload();
+        await setDoc(state.telemetryDocRef, payload, { merge: true });
+        if (!silent) showToast('Đã đồng bộ JSON lên Realtime DB', 'BUY');
+      } catch (err) {
+        console.error('Realtime DB sync error:', err);
+        if (!silent) showToast('Lỗi ghi dữ liệu lên DB', 'SELL');
+      }
+    }
+
+    async function initRealtimeDatabase() {
+      const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+      const docPathStr = `artifacts/${appId}/public/data/gnt_telemetry/live_state`;
+      const pathEl = document.getElementById('db-doc-path');
+      if (pathEl) pathEl.textContent = docPathStr;
+
+      if (typeof __firebase_config === 'undefined' || !__firebase_config) {
+        updateDbStatusBadge(false, 'LOCAL SIMULATOR');
+        return;
+      }
+
+      try {
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+
+        if (!auth.currentUser) {
+          updateDbStatusBadge(false, 'LOCAL SIMULATOR');
+          return;
+        }
+
+        state.telemetryDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'gnt_telemetry', 'live_state');
+        state.dbReady = true;
+        updateDbStatusBadge(true, 'LIVE DB CONNECTED');
+
+        state.unsubSnapshot = onSnapshot(
+          state.telemetryDocRef,
+          (snap) => {
+            // IMPORTANT: If doc doesn't exist yet or is empty, keep default 3 open positions intact!
+            if (!snap.exists()) return;
+            const data = snap.data();
+            if (!data || Object.keys(data).length === 0) return;
+
+            state.externalOverride = true;
+            state.localTickSim = false;
+            const chk = document.getElementById('sim-tick-toggle');
+            if (chk) chk.checked = false;
+
+            applyExternalJsonPayload(data);
+          },
+          (err) => {
+            console.error('onSnapshot error:', err);
+            updateDbStatusBadge(false, 'DB STREAM STANDBY');
+          }
+        );
+      } catch (err) {
+        console.error('Firebase init failed:', err);
+        updateDbStatusBadge(false, 'LOCAL SIMULATOR');
+      }
+    }
+
+    function copyTextFallback(text, successMsg) {
+      const temp = document.createElement('textarea');
+      temp.value = text;
+      temp.style.position = 'fixed';
+      temp.style.opacity = '0';
+      document.body.appendChild(temp);
+      temp.select();
+      try {
+        document.execCommand('copy');
+        showToast(successMsg, 'BUY');
+      } catch (e) {
+        showToast('Không thể sao chép tự động', 'SELL');
+      }
+      document.body.removeChild(temp);
+    }
+
+    function copyDbPath() {
+      const pathText = document.getElementById('db-doc-path')?.textContent || '';
+      copyTextFallback(pathText, 'Đã sao chép đường dẫn DB!');
+    }
+
+    function copyJsonTemplate() {
+      const editor = document.getElementById('mt5-json-textarea');
+      const text = editor ? editor.value : JSON.stringify(buildMt5JsonPayload(), null, 2);
+      copyTextFallback(text, 'Đã sao chép JSON Schema MT5!');
+    }
+
+    async function seedDemoDataToDb() {
+      state.positions = createDefaultPositions();
+      state.regime = 'TREND';
+      state.slopeAtr = 0.058;
+      state.bid = 2649.80;
+      syncRegimeVisuals('TREND');
+      renderAll(true);
+
+      const editor = document.getElementById('mt5-json-textarea');
+      if (editor) editor.value = JSON.stringify(buildMt5JsonPayload(), null, 2);
+
+      if (state.dbReady) {
+        await syncStateToRealtimeDb(false);
+      } else {
+        showToast('Đã khôi phục 3 vị thế mẫu!', 'NEUTRAL');
+      }
+    }
+
+    async function pushJsonFromEditor() {
+      const editor = document.getElementById('mt5-json-textarea');
+      if (!editor) return;
+      try {
+        const parsed = JSON.parse(editor.value);
+        state.localTickSim = false;
+        const chk = document.getElementById('sim-tick-toggle');
+        if (chk) chk.checked = false;
+
+        applyExternalJsonPayload(parsed);
+
+        if (state.dbReady && state.telemetryDocRef) {
+          await setDoc(state.telemetryDocRef, parsed, { merge: true });
+          showToast('Đã Push JSON lên Realtime DB!', 'BUY');
+        } else {
+          showToast('Đã cập nhật UI từ JSON (Local)', 'NEUTRAL');
+        }
+      } catch (err) {
+        showToast('JSON không hợp lệ! Kiểm tra lại cú pháp', 'SELL');
+      }
+    }
+
+    // =========================================================================
+    // 9. LIVE TICK SIMULATOR, TOAST & SYNCHRONOUS BOOTSTRAP
+    // =========================================================================
+    setInterval(() => {
+      if (!state.isRunning || !state.localTickSim) return;
+
+      const step = (Math.random() - 0.49) * 0.14;
+      state.bid = +(state.bid + step).toFixed(2);
+
+      if (Math.random() > 0.6) {
+        const lat = 12 + Math.floor(Math.random() * 5);
+        document.getElementById('foot-latency').textContent = `${lat} ms`;
+      }
+
+      recalcFloatingPnl();
+      renderPositions();
+      renderPerformanceSections();
+      renderEngineBreakdown();
+      renderFooterPrices();
+    }, 1200);
+
+    let toastTimer = null;
+    function showToast(msg, tone) {
+      const toast = document.getElementById('hud-toast');
+      const dot = document.getElementById('toast-dot');
+      const text = document.getElementById('toast-msg');
+
+      const palette = {
+        TREND: '#00e5ff',
+        NEUTRAL: '#f59e0b',
+        REVERS: '#a855f7',
+        BUY: '#34d399',
+        SELL: '#fb7185'
+      };
+      const c = palette[tone] || '#00e5ff';
+
+      text.textContent = msg;
+      dot.style.background = c;
+      dot.style.boxShadow = `0 0 8px ${c}`;
+      toast.style.borderColor = c;
+
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 2100);
+    }
+
+    window.addEventListener('resize', queueCircuitRender);
+    window.addEventListener('load', drawCircuits);
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(() => queueCircuitRender());
+      const shellEl = document.getElementById('hud-shell');
+      if (shellEl) ro.observe(shellEl);
+    }
+
+    function bootDashboard() {
+      // 1. Render complete default state & 3 live open positions synchronously FIRST
+      syncRegimeVisuals(state.regime);
+      applyRunningVisuals(state.isRunning);
+      renderAll(true);
+
+      const editor = document.getElementById('mt5-json-textarea');
+      if (editor) editor.value = JSON.stringify(buildMt5JsonPayload(), null, 2);
+
+      // 2. Draw all SVG Bezier circuit connections immediately
+      drawCircuits();
+      requestAnimationFrame(drawCircuits);
+      setTimeout(drawCircuits, 80);
+
+      // 3. Connect Firebase Firestore asynchronously in the background
+      initRealtimeDatabase();
+
+    }
+
+    // Expose handlers globally for inline HTML attributes
+    window.toggleSlopeDrawer = toggleSlopeDrawer;
+    window.toggleJsonDrawer = toggleJsonDrawer;
+    window.toggleLocalTickSim = toggleLocalTickSim;
+    window.handleSlopeInput = handleSlopeInput;
+    window.selectRegime = selectRegime;
+    window.toggleSection = toggleSection;
+    window.openNewPosition = openNewPosition;
+    window.closeSinglePosition = closeSinglePosition;
+    window.togglePosExpand = togglePosExpand;
+    window.setRunning = setRunning;
+    window.handleCloseAll = handleCloseAll;
+    window.copyDbPath = copyDbPath;
+    window.copyJsonTemplate = copyJsonTemplate;
+    window.seedDemoDataToDb = seedDemoDataToDb;
+    window.pushJsonFromEditor = pushJsonFromEditor;
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', bootDashboard);
+    } else {
+      bootDashboard();
+    }
+  </script>
+</body>
+</html>
